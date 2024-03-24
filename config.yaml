@@ -1,0 +1,12 @@
+# List of SLN codes for classes to register Lecture SLN will include 
+# all sections, while section SLN will include only that section
+slns:
+  - 10356          # ARCH 151 only lecture
+  - 10549          # ASTR 101 w/o specific quiz section
+  - [12646, 12648] # CSE 121 w/ specific quiz section
+  - 12875: 12823   # CSE401: CSE344 -> drop 344 for 401 when registering
+  - 12876: 12877   # switch sections B -> A for CSE401
+year:
+  2024
+quarter:
+  "SPR"
