@@ -22,11 +22,10 @@ class RegistrationBot():
         self.quarter = config['quarter']
         self.year = config['year']
 
-        self.classHierarchy = {10355: []} # hardcode initially
-        self.drops = {}                                      # hardcode initially
+        self.classHierarchy = config['slns']
 
         # TODO: adjust interval dynamically based on number of slns and rate limit
-        self.interval = 3
+        self.interval = 20
 
     # Prompts user to log in and save cookie credentials for future login
     def uw_login(self):
@@ -43,6 +42,7 @@ class RegistrationBot():
 
             login_browser.get(self.idp_url)
             self.idp_cookies = login_browser.get_cookies()
+            print('Login successful')
             login_browser.quit()
             
         except Exception:
@@ -55,27 +55,17 @@ class RegistrationBot():
         for cookie in self.idp_cookies: 
             self.browser.add_cookie(cookie)
         
-        self.setup()
-        
         while self.classHierarchy:
-            print("Classes:" +  str(self.classHierarchy))
             open_lecture_slns = self.get_open_lecture_slns()
 
             if open_lecture_slns != []:
                 for lecture_sln in open_lecture_slns:
                     slns = self.get_sln_pairs(lecture_sln)
-                    drops = self.get_drops_from_slns(lecture_sln)
-                    self.register(slns, drops)
-            
+                    self.register(slns)
+                    
+            print()
             time.sleep(self.interval)
 
-    # Using the slns build self.classHierchy, which is List[Dict] where each dict represnts a class 
-    # inputs: self.slns: List[int | Tuple | Dict]
-    # outputs: self.classHierarchy: Dict{int: List[int]} / lecture -> section(s)
-    def setup(self):
-        # TODO
-        pass
-    
     # Sends a get request to urls contianing status for slns and scrape 
     # the html to get open lecture/sections
     def get_open_lecture_slns(self) -> List[int]:
@@ -83,15 +73,19 @@ class RegistrationBot():
 
         # TODO: Fix case where there class is 'Open' but no spots available
         #       (this will cause bot to repeatly register and go over registration limit)
+        local_time = time.localtime()
+        formatted_time = time.strftime("%H:%M:%S", local_time)
+
+        print(formatted_time + ' Looking through slns to find open courses...')
         for lecture_sln in self.classHierarchy:
             self.browser.get(f'https://sdb.admin.uw.edu/timeschd/uwnetid/sln.asp?QTRYR={self.quarter}+{self.year}&SLN={lecture_sln}')
             status_table = self.browser.find_elements(By.CSS_SELECTOR, 'table.main')[1]
             text = status_table.get_attribute('textContent')
-            print(text)
             if 'Open' in text:
                 open_slns.append(lecture_sln)
 
-        print(open_slns)
+        print('Open courses:' + str(open_slns))
+
         return open_slns
 
     # Filters the lecture sln into lecture + section sln pairs (or just lecture)
@@ -104,35 +98,12 @@ class RegistrationBot():
         else:
             return [(lecture_sln, section_sln) for section_sln in sections]
 
-    # For each sln (class), find the class we want to drop/replace if exists and return
-    def get_drops_from_slns(self, sln_pairs) -> List[Tuple[int, ...]]:
-        # TODO
-        return []
-    
     # Register and drops given slns, updates current state if successful
-    def register(self, slns, drops):
+    def register(self, slns):
         self.browser.get(self.registration_url)
 
-        # Drop classes
-        registered_slns_table = self.browser.find_element(By.CSS_SELECTOR, 'table.sps_table.update:first-of-type')
-        registered_slns_rows = registered_slns_table.find_elements(By.CSS_SELECTOR, 'tbody > tr')
-        
-        for sln in drops:
-            # Find the row with the current SLN
-            target_row = None
-            for row in registered_slns_rows:
-                if str(sln) in row.text:
-                    target_row = row
-                    break
-
-            # If the row is found find the checkbox within this row and check it
-            if target_row:
-                checkbox = target_row.find_element(By.CSS_SELECTOR, 'input[type="checkbox"]')
-                if checkbox:
-                    checkbox.click()
-
+        print('Open class found, attemping to register...')
         # Register Classes
-        print("REGISTERING FOR NEW CLASS")
         for sln_pair in slns:
             add_slns_table = self.browser.find_element(By.CSS_SELECTOR, 'table.sps_table.update:nth-of-type(2)')
 
@@ -149,11 +120,12 @@ class RegistrationBot():
             
             # Update list of slns to register depending on whether registration is successful
             if 'Schedule updated' in result_text:
-                print('success hehehehe')
+                print('Successful registration')
                 self.classHierarchy.pop(sln_pair[0])
-                # TODO: updates drops as well (not necessary though)
                 break
-        
+
+            print('Unsuccessful registration')
+
 
 if __name__ == '__main__':
     # load yaml file and process command line args and configurations
@@ -167,6 +139,3 @@ if __name__ == '__main__':
     bot.uw_login()
     bot.start()
     bot.browser.quit()
-
-    
-    
